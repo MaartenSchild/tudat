@@ -29,6 +29,7 @@ namespace tudat
      * \return void
      */
     double  tleToSemiMajorAxis(tudat::ephemerides::Tle tle, double gravitationalParameter);
+    std::map< double, double > tleToSemiMajorAxis(std::vector<tudat::ephemerides::Tle> tleSeries, double gravitationalParameter);
 
 
 
@@ -42,6 +43,19 @@ namespace tudat
 
     std::vector<double> slice(const std::vector<double> v, int start, int end);
     Eigen::VectorXd detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap);
+
+    void fasper(std::vector<double> &x, std::vector<double> &y, const double ofac, const double hifac,
+                std::vector<double> &px, std::vector<double> &py, int &nout, int &jmax, double &prob);
+
+    void spread(const double y, std::vector<double> &yy, const double x, const int m);
+    void avevar(std::vector<double> &data, double &ave, double &var);
+    void realft(std::vector<double> &data, const int isign);
+    void four1(double *data, const int n, const int isign);
+    void four1(std::vector<double> &data, const int isign);
+    double SQR(double x);
+    double SIGN(const double &a, const double &b);
+    void SWAP(double &a, double &b);
+
 
     } // namespace maneuver_detection
 } // namespace tudat
