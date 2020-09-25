@@ -42,7 +42,7 @@ namespace tudat
     std::map< double, Eigen::VectorXd > determineThreshold(std::map<double, double> correctedSeries, int halfWindowSize, double min = 0, double max = 0);
 
     std::vector<double> slice(const std::vector<double> v, int start, int end);
-    Eigen::VectorXd detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap);
+    std::map< double, double > detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap);
 
     void fasper(std::vector<double> &x, std::vector<double> &y, const double ofac, const double hifac,
                 std::vector<double> &px, std::vector<double> &py, int &nout, int &jmax, double &prob);
@@ -55,6 +55,7 @@ namespace tudat
     double SQR(double x);
     double SIGN(const double &a, const double &b);
     void SWAP(double &a, double &b);
+    double harmonicAnalysis(std::vector<double> x, std::vector<double> y);
 
 
     } // namespace maneuver_detection

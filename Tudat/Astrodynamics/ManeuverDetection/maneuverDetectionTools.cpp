@@ -140,11 +140,13 @@ namespace tudat
             int lengthSeries = correctedSeries.size();
             double correctedArray[correctedSeries.size()];
             std::vector<double> correctedVector;
+            std::vector<double> correctedTimeDay;
             std::vector<double> correctedTime;
             int i =0;
             for(const auto &map : correctedSeries){
                 correctedArray[i++] = map.second;
                 correctedVector.push_back(map.second);
+                correctedTimeDay.push_back(tudat::basic_astrodynamics::convertSecondsSinceEpochToJulianDay(map.first));
                 correctedTime.push_back(map.first);
             }
 
@@ -164,10 +166,13 @@ namespace tudat
             //for (int point = backWindowSize; point< (correctedSeries.size() ); point++ )
             {
                 std::vector<double> correctedWindow = tudat::maneuver_detection::slice(correctedVector, point - halfWindowSize, point + 1 +halfWindowSize);
+                std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point + 1 +halfWindowSize);
+
+                double amplitude = tudat::maneuver_detection::harmonicAnalysis(timeWindow, correctedWindow);
 
                 std::tie(Q1, Q2, Q3) = tudat::maneuver_detection::IQR(correctedWindow.data(), correctedWindow.size());
-                double thresholdUpper = Q3 + (Q3-Q1);
-                double thresholdLower = Q1 - (Q3-Q1);
+                double thresholdUpper = Q3 + (Q3-Q1) + amplitude;
+                double thresholdLower = Q1 - (Q3-Q1) - amplitude;
                 Eigen::VectorXd threshold(2);
                 threshold[0] = std::max(thresholdUpper, minThresholdUpper);
                 threshold[1] = std::min(thresholdLower, minThresholdLower);
@@ -178,33 +183,42 @@ namespace tudat
             }
             return thresholdMap;
         }
-        Eigen::VectorXd detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap){
-            std::vector<double> maneuvers;
+        std::map< double, double > detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap){
+            // TODO more useful map info
+            std::map< double, double > maneuverMap;
             int n = 0;
             double t = 0;
-
+            int count = 0;
+            int allowcount = 0;
+            bool maneuvering = false;
+            int allowed = 2; //Allowed values within threshold in maneuvers
             for(auto &imap: correctedSeries)
             {
                 if (imap.second > thresholdMap[imap.first][0] || imap.second < thresholdMap[imap.first][1]){
-                    //maneuvers.push_back(imap.first);
-                    //std::cout << imap.first << " " <<imap.second << " " << thresholdMap[imap.first][0] << std::endl;
+                    if (maneuvering == false){
+                        maneuvering = true;
+                        t = imap.first;
+                    }
                     n++;
-
-                } else if (n > 2){
-                    maneuvers.push_back(imap.first);
-                    //std::cout << imap.first << " " <<imap.second << " " << thresholdMap[imap.first][0] << std::endl;
-                    n = 0;
-                } else {
-                    n = 0;
-
+                    allowcount = 0;
+                }
+                else {
+                    if (allowcount<allowed){
+                        allowcount++;
+                    }
+                    else{
+                        if (n > 2){
+                            count++;
+                            maneuverMap[t] = count;
+                        }
+                        allowcount = 0;
+                        n = 0;
+                        maneuvering=false;
+                    }
                 }
             }
-            Eigen::VectorXd maneuversEigen(maneuvers.size());
-            for(int i = 0; i<maneuvers.size(); i++)
-            {
-                maneuversEigen[i] = maneuvers[i];
-            }
-            return maneuversEigen;
+
+            return maneuverMap;
         }
         void fasper(std::vector<double> &x, std::vector<double> &y, double ofac, double hifac, std::vector<double> &px, std::vector<double> &py, int &nout, int &jmax, double &prob) {
             const int MACC = 4;
@@ -392,6 +406,70 @@ namespace tudat
 
         void SWAP(double &a, double &b)
             {double dum=a; a=b; b=dum;}
+        double harmonicAnalysis(std::vector<double> x, std::vector<double> y){
 
-        } // namespace maneuver_detection
+            // HARMONIC ANALYSIS
+            /*
+            double xar[] = {37.454011884736246, 95.07143064099162, 73.1993941811405, 59.86584841970366, 15.601864044243651, 15.599452033620265, 5.8083612168199465, 86.61761457749351, 60.11150117432088, 70.80725777960456, 2.0584494295802447, 96.99098521619943, 83.24426408004217, 21.233911067827616, 18.182496720710063, 18.34045098534338, 30.42422429595377, 52.475643163223786, 43.194501864211574, 29.122914019804192, 61.18528947223795, 13.949386065204184, 29.214464853521815, 36.63618432936917, 45.606998421703594, 78.51759613930136, 19.967378215835975, 51.42344384136116, 59.24145688620425, 4.645041271999773, 60.75448519014384, 17.052412368729154, 6.505159298527952, 94.88855372533332, 96.56320330745594, 80.83973481164611, 30.46137691733707, 9.767211400638388, 68.42330265121569, 44.01524937396013, 12.203823484477883, 49.51769101112702, 3.4388521115218396, 90.9320402078782, 25.87799816000169, 66.2522284353982, 31.171107608941096, 52.00680211778108, 54.67102793432797, 18.485445552552704, 96.95846277645586, 77.51328233611146, 93.9498941564189, 89.48273504276489, 59.78999788110851, 92.18742350231169, 8.84925020519195, 19.59828624191452, 4.522728891053807, 32.53303307632643, 38.8677289689482, 27.134903177389592, 82.87375091519293, 35.67533266935893, 28.093450968738075, 54.26960831582485, 14.092422497476264, 80.21969807540397, 7.455064367977082, 98.68869366005173, 77.22447692966574, 19.87156815341724, 0.5522117123602399, 81.54614284548342, 70.68573438476172, 72.90071680409874, 77.12703466859458,
+                            7.4044651734090365, 35.84657285442726, 11.586905952512971, 86.31034258755935, 62.329812682755794, 33.08980248526492, 6.355835028602364, 31.09823217156622, 32.518332202674706, 72.96061783380641, 63.75574713552131, 88.72127425763266, 47.22149251619493, 11.959424593830171, 71.3244787222995, 76.07850486168974, 56.127719756949624, 77.0967179954561, 49.379559636439076, 52.27328293819941, 42.75410183585496, 2.541912674409519, 10.789142699330444};
+            double yar[] ={3.8201923923728454, 4.844782225244905, -2.8833670573663337, -3.0749463272387807, -4.720037151286264, -4.735276443806648, 2.415400063180868, -4.04375725158461, 4.23077948675483, 2.309624161558726, 4.551529640704266, -0.8126654182150839, -5.023779889016205, -4.720499571975827, -1.4601984654898927, 0.7656767237708686, 4.879144763221514, 2.183010915189709, -2.5438960072511136, 3.5254303820480963, -1.6897214514609042, -4.05271825403947, -3.9191504350845587, -2.7408639177566405, -4.65227104853875, -1.670221358875789, -2.9186807584441277, 4.87902965592326, -4.951438753491215, -1.9417638902008152, 5.1707600779058955, 4.191954480594582, -0.459731285767004, -4.321691090924678, -4.836234354804626, -0.6045134964453002, 3.333017135592395, 4.985491472574076, 4.941699009263856, 1.447664497031278, -3.2260489570498856, -1.7534761433074701, 4.68341829650406, -4.716334184033022, -3.65048703322235, -5.086528340250541, -0.27778087051711997, 0.4991443085461853, 0.4692626811590124, 1.573627393247171, -3.625950513296567, -1.295423261175356, -4.040975245877911, 1.5482657711861838, 3.4899134957105797, -1.8998979487563088, -1.583955436448821, -4.755345529086185, -2.1691562278880236, -2.7609918600892702, -3.097655488418317, 2.785753424541316, -3.3699668903611366, 0.6900376493225708, 4.932092701309594, -4.5316307781806895, 4.766048896766128, -4.187860617800865, 3.7725289937681747, 2.0950426393771533, -4.556130591377167, -3.431634768595316, -4.111863813699266, -3.7912114880928245, 1.7836967802211103, -4.7410793934279685, 3.32936782926948, 4.891565632183207, -1.2055764285637787, -5.0601019673768395, -1.9130596599211067, -0.2841867096934201, 4.8437418906218905, 2.1233727726085263, 4.706651507529654, -1.614880878269942, -3.2641973737380154, 4.88862146136544, 4.381103963587335, -4.254053822217937, -3.379859935177536, -0.6409788911213476, 4.954766360962028, 3.2743411779518934, 4.752759027856264, 3.744397575949538, -4.533865685643313, 5.019177541764259, -3.5242215090044366, 3.7823936689291484};
+
+            std::vector<double> x (xar, xar + sizeof(xar) / sizeof(double) );
+            std::vector<double> y (yar, yar + sizeof(yar) / sizeof(double) );
+            std::vector<double> xs, ys;
+            for(auto &imap: theilSenCorrected){
+                xs.push_back(imap.first/(physical_constants::JULIAN_DAY));
+                ys.push_back(imap.second);
+            }
+            */
+            double ofac = 4;
+            double hifac = 1;
+            std::vector<double> px(100);
+            std::vector<double> py(100);
+            int nout = 100;
+            int jmax = 0;
+            double prob = 0;
+            tudat::maneuver_detection::fasper(x, y, ofac, hifac, px, py, nout, jmax, prob);
+
+            std::map< double, double > harmonicsTestMap;
+            for (int l = 0; l<px.size(); l++){
+                harmonicsTestMap[px[l]] = py[l];
+            }
+            double sig = 0;
+            double n = y.size();
+            for (int ind = 0; ind<n; ind++){
+                sig+=y[ind]*y[ind];
+            }
+            sig = sig/(n-1);
+
+            //std::cout <<"size: "<< px.size()<< " jmax: "<< jmax <<" px: " << px[jmax] <<" py: "<< py[jmax]<< " prob: "<< prob << " amplitude: "<< amp<< std::endl;
+            //std::cout <<"min: "<< px[0]<< " max: "<< px[nout-1] << " size:"<< px.size()<< std::endl;
+
+
+            //const std::string filePath( __FILE__ );
+            /*
+            const std::string folder = "C:/tudatBundle/tudatApplications/MScThesis/output/harmonics/";
+            boost::gregorian::date date = tudat::basic_astrodynamics::convertJulianDayToCalendarDate(x[0]);
+            std::string x0 = std::to_string(date.year())+"-"+std::to_string(date.month())+"-"+std::to_string(date.day());
+
+            boost::gregorian::date datef = tudat::basic_astrodynamics::convertJulianDayToCalendarDate(x[x.size()-1]);
+            std::string xf = std::to_string(datef.year())+"-"+std::to_string(datef.month())+"-"+std::to_string(datef.day());
+
+            tudat::input_output::writeDataMapToTextFile(harmonicsTestMap, x0+"_"+xf+"harmonics.dat",
+                                                        folder,
+                                                        "",
+                                                        std::numeric_limits< double >::digits10,
+                                                        std::numeric_limits< double >::digits10,
+                                                        "," );
+            //  END HARMONICS
+            */
+            double amp;
+            if (prob<0.001){
+                amp = std::sqrt((2/n)*2*sig*py[jmax]);
+            } else{
+                amp = 0;
+            }
+            //std::cout <<"amp: "<< amp<< " date: "<< tudat::basic_astrodynamics::convertJulianDayToCalendarDate(x[0])<< " - "<< tudat::basic_astrodynamics::convertJulianDayToCalendarDate(x[x.size()-1])<<std::endl;
+            return amp;
+        }        } // namespace maneuver_detection
     } // namespace tudat
