@@ -65,27 +65,35 @@ namespace tudat
 
         std::tuple<double, double> theilSen(std::vector< double> x, std::vector< double> y) {
             //TODO: make private
-            int len = x.size();
-            double slopes[ len * len ];
+            int n = x.size();
+            //int len = n*(n-1)/2;
+            int len = (n)*(n);
+            double slopes[ len  ];
+            double intercepts[ len  ];
             int count = 0;
-            for (int i = 0; i < len; i++) {
-                for (int j = i + 1; j < len; j++) {
+            for (int i = 0; i < n; i++) {
+                //for (int j = i + 1; j < n; j++) {
+                for (int j = 0; j < n; j++) {
                     if (x[i] != x[j]) {
                         slopes[count++] = (y[j] - y[i]) / (x[j] - x[i]);
+                        intercepts[count] = (x[j]*y[i] - x[i]*y[j]) / (x[j] - x[i]);
+                        //std::cout << intercepts[count] << std::endl;
                     }
                 }
             }
 
             double medianSlope = calcMedian(slopes, count);
 
-            double cuts[len];
-            for (int k = 0; k < len; k++) {
+            double cuts[n];
+            for (int k = 0; k < n; k++) {
                 cuts[k] = y[k] - medianSlope * (double)x[k];
             }
-
+            double intercept = calcMedian(cuts, n);
             double slope = medianSlope;
-            double intercept = calcMedian(cuts, len);
+
+
             return std::make_tuple(intercept, slope);
+
         }
 
         std::vector<double> slice(const std::vector<double> v, int start=0, int end=-1) {
@@ -121,7 +129,8 @@ namespace tudat
             {
                 //std::vector<double> timeWindow = slice(time, point - halfWindowSize, point + halfWindowSize + 1);
                 std::vector<double> timeWindow = slice(time, point - halfWindowSize, point);
-                std::vector<double> aWindow = slice(a, point - halfWindowSize, point + halfWindowSize + 1);
+                //std::vector<double> aWindow = slice(a, point - halfWindowSize, point + halfWindowSize + 1);
+                std::vector<double> aWindow = slice(a, point - halfWindowSize, point);
                 std::tie(intercept, slope) = theilSen(timeWindow, aWindow);
                 correctedSeries[time[point]] = a[point] - intercept - slope * time[point];
             }
@@ -163,10 +172,12 @@ namespace tudat
                 thresholdMap[imap.first] = threshold;
             }
             for (int point = halfWindowSize; point< (correctedSeries.size() - halfWindowSize); point++ )
-            //for (int point = backWindowSize; point< (correctedSeries.size() ); point++ )
+            //for (int point = halfWindowSize; point< (correctedSeries.size() ); point++ )
             {
                 std::vector<double> correctedWindow = tudat::maneuver_detection::slice(correctedVector, point - halfWindowSize, point + 1 +halfWindowSize);
                 std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point + 1 +halfWindowSize);
+                //std::vector<double> correctedWindow = tudat::maneuver_detection::slice(correctedVector, point - halfWindowSize, point );
+                //std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point );
 
                 double amplitude = tudat::maneuver_detection::harmonicAnalysis(timeWindow, correctedWindow);
 
@@ -191,7 +202,7 @@ namespace tudat
             int count = 0;
             int allowcount = 0;
             bool maneuvering = false;
-            int allowed = 2; //Allowed values within threshold in maneuvers
+            int allowed = 3; //Allowed values within threshold in maneuvers
             for(auto &imap: correctedSeries)
             {
                 if (imap.second > thresholdMap[imap.first][0] || imap.second < thresholdMap[imap.first][1]){
@@ -444,8 +455,6 @@ namespace tudat
 
             //std::cout <<"size: "<< px.size()<< " jmax: "<< jmax <<" px: " << px[jmax] <<" py: "<< py[jmax]<< " prob: "<< prob << " amplitude: "<< amp<< std::endl;
             //std::cout <<"min: "<< px[0]<< " max: "<< px[nout-1] << " size:"<< px.size()<< std::endl;
-
-
             //const std::string filePath( __FILE__ );
             /*
             const std::string folder = "C:/tudatBundle/tudatApplications/MScThesis/output/harmonics/";
@@ -463,6 +472,8 @@ namespace tudat
                                                         "," );
             //  END HARMONICS
             */
+
+
             double amp;
             if (prob<0.001){
                 amp = std::sqrt((2/n)*2*sig*py[jmax]);
