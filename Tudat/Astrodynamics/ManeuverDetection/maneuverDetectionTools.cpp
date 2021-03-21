@@ -6,6 +6,23 @@
 #include "Tudat/Astrodynamics/Ephemerides/ephemeris.h"
 #include <Tudat/SimulationSetup/tudatSimulationHeader.h>
 
+/*      Maneuver detection algorithm components
+ *      Author: Maarten Schild
+ *      Date: 21-03-2021
+ *
+ *      Used for MSc Thesis "Sun-synchronous Spacecraft compliance with International Space Debris Guidelines"
+ *      http://resolver.tudelft.nl/uuid:f105b7fc-b9d6-484e-9c70-c76ba994d0a4
+ *
+ *
+ *      Converts TLE series to semimajor axis series
+ *      Theil-Sen-Siegel Slope correction
+ *      Harmonic detection
+ *      Treshold Generation
+ *      Event Detection
+ *
+ *
+ *
+ */
 
 namespace tudat
 {
@@ -83,21 +100,18 @@ namespace tudat
             }
 
             double medianSlope = calcMedian(slopes, count);
-
             double cuts[n];
             for (int k = 0; k < n; k++) {
                 cuts[k] = y[k] - medianSlope * (double)x[k];
             }
             double intercept = calcMedian(cuts, n);
             double slope = medianSlope;
-
-
             return std::make_tuple(intercept, slope);
 
         }
 
         std::vector<double> slice(const std::vector<double> v, int start=0, int end=-1) {
-            // TODO: make private
+
             int oldlen = v.size();
             int newlen;
             if (end == -1 or end >= oldlen){
@@ -137,14 +151,7 @@ namespace tudat
             return correctedSeries;
         }
         std::map< double, Eigen::VectorXd > determineThreshold(std::map<double, double> correctedSeries, int halfWindowSize, double min , double max){
-            // Lines below are for possible unit teste
-            //int n = theilSenCorrected.size();
-            //double testarr[] = { 1, 19, 7, 6, 5, 9, 12, 27, 18, 2, 15 };
-            //double Q1, Q2, Q3;
-            //std::tie(Q1, Q2, Q3) = tudat::maneuver_detection::IQR(correctedSemiMajorAxisArray, n);
-            //double IQR = (Q3 - Q1);
-            //double IQR = tudat::maneuver_detection::IQR(testarr, 11);
-            //std::cout << Q1 << " " << Q2 << " " << Q3<< " IQR "<<IQR << std::endl;
+
             std::map< double, Eigen::VectorXd > thresholdMap;
             int lengthSeries = correctedSeries.size();
             double correctedArray[correctedSeries.size()];
@@ -187,11 +194,6 @@ namespace tudat
                     amplitudeVector[p] = amplitude;
                     //std::cout <<p << std::endl;
                 }
-                //amplitudeVector[point] = amplitude;
-                //amplitudeVector[point-50] = amplitude;
-                //amplitudeVector[point+50] = amplitude;
-                //std::fill(amplitudeVector.begin() + point - 50, amplitudeVector.begin() + point + 50, amplitude);
-
             }
 
 
@@ -201,9 +203,7 @@ namespace tudat
                 std::vector<double> correctedWindow = tudat::maneuver_detection::slice(correctedVector, point - halfWindowSize, point + 1 +halfWindowSize);
                 std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point + 1 +halfWindowSize);
                 //std::vector<double> correctedWindow = tudat::maneuver_detection::slice(correctedVector, point - halfWindowSize, point );
-                //std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point );
-
-                //
+                //std::vector<double> timeWindow = tudat::maneuver_detection::slice(correctedTimeDay, point - halfWindowSize, point );                
 
                 double amplitude = amplitudeVector[point];
                 std::tie(Q1, Q2, Q3) = tudat::maneuver_detection::IQR(correctedWindow.data(), correctedWindow.size());
@@ -220,8 +220,7 @@ namespace tudat
             //std::cout << "test2" << std::endl;
             return thresholdMap;
         }
-        std::map< double, double > detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap, int skipN){
-            // TODO more useful map info
+        std::map< double, double > detectManeuver(std::map<double, double> correctedSeries, std::map< double, Eigen::VectorXd > thresholdMap, int skipN){            
             std::map< double, double > maneuverMap;
             int n = 0;
             double t = 0;
@@ -258,9 +257,9 @@ namespace tudat
                 }
                 i++;
             }
-
             return maneuverMap;
         }
+
         std::vector<double> linspace(double start, double end, int num_in)
         {
           std::vector<double> linspaced;
