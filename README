@@ -1,1 +1,143 @@
 Documentation for the Tudat project can be obtained at http://tudat.tudelft.nl.
+
+Branch that added maneuver detection tools to the toolkit
+Example use:
+
+#include <Tudat/SimulationSetup/tudatSimulationHeader.h>
+#include <Tudat/Astrodynamics/ManeuverDetection/maneuverDetectionTools.h>
+#include <Tudat/InputOutput/twoLineElementsFileReader.h>
+#include "Tudat/InputOutput/basicInputOutput.h"
+#include "../applicationOutput.h"
+#include <iostream>
+#include <fstream>
+#include <sstream>
+
+using namespace tudat;
+using namespace tudat::input_output;
+using namespace tudat::maneuver_detection;
+
+
+using namespace tudat::simulation_setup;
+using namespace tudat::propagators;
+using namespace tudat::numerical_integrators;
+using namespace tudat::orbital_element_conversions;
+using namespace tudat::basic_mathematics;
+using namespace tudat::unit_conversions;
+
+/*      Example use of the maneuver detection algorithm
+ *      Author: Maarten Schild
+ *      Date: 21-03-2021
+ *
+ *      Used for MSc Thesis "Sun-synchronous Spacecraft compliance with International Space Debris Guidelines"
+ *      http://resolver.tudelft.nl/uuid:f105b7fc-b9d6-484e-9c70-c76ba994d0a4
+ *
+ *
+ *      Reads satcat numbers from satcat.txt located in input folder
+ *      For each satcat, it reads TLE located in tleseries folder
+ *      Returns detected maneuver times in output folder
+ *
+ *
+ *
+ *
+ */
+
+int main( )
+{
+
+    // Maneuver Detection settings
+    double lim = 0.01;
+    int theilWindowSize = 10;
+    int windowSize = 100;
+    const double gravitationalParameter = 398600.4418;
+
+    std::string settingsString = std::to_string(lim)+"_"+std::to_string(theilWindowSize)+"_"+std::to_string(windowSize);
+    const std::string tleFilePath( __FILE__ );
+    std::cout<< settingsString <<std::endl;
+
+    // Setting input and output folders
+    const std::string tleFolder = tleFilePath.substr( 0 , tleFilePath.find_last_of("/\\")+1 ) + "tleseries/";
+    std::string f;    
+    const std::string fileTxt = tleFilePath.substr( 0 , tleFilePath.find_last_of("/\\")+1 ) + "input/";
+    std::string outputFolder = tleFilePath.substr( 0 , tleFilePath.find_last_of("/\\")+1 ) + "output/" + settingsString+"/" ;
+
+    // satcat.txt contains the satcat number of all to be checked sats
+    std::ifstream in(fileTxt+"satcat.txt");
+    std::vector<std::string> files;
+    while (std::getline(in, f))
+    {
+        // Line contains string of length > 0 then save it in vector
+        if(f.size() > 0)
+            files.push_back(f);
+    }
+    int nFiles = (int)files.size();
+    std::cout<< "Starting Maneuver Detection of "<<nFiles<<" files:"<<std::endl;
+    // Reads TLE files for all satellites in satcat.txt
+    for (int n = 0; n < (int)files.size(); n++){
+        std::string tleFile = files[n];
+
+        std::cout << n+1 << "/" << nFiles <<  "\t Read file: "<<tleFile<<std::endl;        
+        std::vector<tudat::ephemerides::Tle> tleSeries;        
+
+        std::ifstream inputFile(tleFolder + tleFile + ".txt");
+        std::string tleLine1, tleLine2;
+        while (std::getline(inputFile, tleLine1)){            
+            std::getline(inputFile, tleLine2);
+            try {
+                tudat::ephemerides::Tle tle(tleLine1+"\n"+ tleLine2);
+                tleSeries.push_back(tle);
+            } catch (std::runtime_error e) {
+                ;
+            }
+        }
+
+        // Converts TLE series to semimajor axis series
+        std::map< double, double > semiMajorAxisSeries =  tudat::maneuver_detection::tleToSemiMajorAxis(tleSeries, gravitationalParameter);
+        std::map< double, double > theilSenCorrected;
+        std::map< double, Eigen::VectorXd > thresholdMap;
+        std::map< double, double > maneuverMap;
+
+        // If TLE data has enough elements to be checked
+        // Apply slope correction, treshold generation and event detection
+        if( semiMajorAxisSeries.size() > 201){
+            theilSenCorrected = tudat::maneuver_detection::theilSenCorrection(semiMajorAxisSeries, theilWindowSize);            
+            thresholdMap = tudat::maneuver_detection::determineThreshold(theilSenCorrected, windowSize, -lim, lim);            
+            maneuverMap = tudat::maneuver_detection::detectManeuver(theilSenCorrected, thresholdMap, windowSize);
+
+        }
+
+        // File writing
+        tudat::input_output::writeDataMapToTextFile(semiMajorAxisSeries, tleFile + "semiMajorAxisSeries.dat",
+                                                    outputFolder,
+                                                    "",
+                                                    std::numeric_limits< double >::digits10,
+                                                    std::numeric_limits< double >::digits10,
+                                                    "," );
+        //std::cout << "Written semi major axis series " << std::endl;
+
+        tudat::input_output::writeDataMapToTextFile(theilSenCorrected, tleFile + "theilSenCorrected.dat",
+                                                    outputFolder,
+                                                    "",
+                                                    std::numeric_limits< double >::digits10,
+                                                    std::numeric_limits< double >::digits10,
+                                                    "," );
+        //std::cout << "Written Theil Sen Corrected series" << std::endl;
+
+        tudat::input_output::writeDataMapToTextFile(thresholdMap, tleFile + "thresholds.dat",
+                                                    outputFolder,
+                                                    "",
+                                                    std::numeric_limits< double >::digits10,
+                                                    std::numeric_limits< double >::digits10,
+                                                    "," );
+        //std::cout << "Written Threshold" << std::endl;
+
+        tudat::input_output::writeDataMapToTextFile(maneuverMap, tleFile + "maneuvers.dat",
+                                                    outputFolder,
+                                                    "",
+                                                    std::numeric_limits< double >::digits10,
+                                                    std::numeric_limits< double >::digits10,
+                                                    "," );
+        //std::cout << "Written Maneuver" << std::endl;
+
+    }
+    return 0;
+}
